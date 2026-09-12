@@ -25,6 +25,9 @@
 static struct cg *_cg_load(uint8_t *data, size_t size, enum cg_type type)
 {
 	switch (type) {
+#ifdef WEB_YUNO_ONLY
+	case CG_TYPE_GP8: return gp8_decode(data, size);
+#else
 	case CG_TYPE_AKB: return akb_decode(data, size);
 	case CG_TYPE_GP4: return gp4_decode(data, size);
 	case CG_TYPE_GP8:  return gp8_decode(data, size);
@@ -35,6 +38,7 @@ static struct cg *_cg_load(uint8_t *data, size_t size, enum cg_type type)
 	case CG_TYPE_PNG: return png_decode(data, size);
 	case CG_TYPE_GPX: return gpx_decode(data, size);
 	case CG_TYPE_GPR: return gpr_decode(data, size);
+#endif
 	}
 	ERROR("invalid CG type: %d", type);
 }
@@ -50,6 +54,9 @@ struct cg *cg_load(uint8_t *data, size_t size, enum cg_type type)
 enum cg_type cg_type_from_name(const char *name)
 {
 	const char *ext = file_extension(name);
+#ifdef WEB_YUNO_ONLY
+	if (!strcasecmp(ext, "gp8")) return CG_TYPE_GP8;
+#else
 	if (!strcasecmp(ext, "akb")) return CG_TYPE_AKB;
 	if (!strcasecmp(ext, "gp4")) return CG_TYPE_GP4;
 	if (!strcasecmp(ext, "gp8")) return CG_TYPE_GP8;
@@ -60,6 +67,7 @@ enum cg_type cg_type_from_name(const char *name)
 	if (!strcasecmp(ext, "gpx")) return CG_TYPE_GPX;
 	if (!strcasecmp(ext, "gpr")) return CG_TYPE_GPR;
 	if (!strcasecmp(ext, "png")) return CG_TYPE_PNG;
+#endif
 	return -1;
 }
 
@@ -132,6 +140,10 @@ struct cg *cg_depalettize_copy(struct cg *cg)
 bool _cg_write(struct cg *cg, FILE *out, enum cg_type type)
 {
 	switch (type) {
+#ifdef WEB_YUNO_ONLY
+	case CG_TYPE_GP8: sys_warning("GP8 write not supported"); return false;
+	case CG_TYPE_PNG: return png_write(cg, out);
+#else
 	case CG_TYPE_AKB: sys_warning("AKB write not supported"); return false;
 	case CG_TYPE_GP4: sys_warning("GP4 write not supported"); return false;
 	case CG_TYPE_GP8: sys_warning("GP8 write not supported"); return false;
@@ -142,6 +154,7 @@ bool _cg_write(struct cg *cg, FILE *out, enum cg_type type)
 	case CG_TYPE_GPX: sys_warning("GPX write not supported"); return false;
 	case CG_TYPE_GPR: sys_warning("GPR write not supported"); return false;
 	case CG_TYPE_PNG: return png_write(cg, out);
+#endif
 	}
 	ERROR("Invalid CG type: %d", type);
 }

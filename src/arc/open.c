@@ -39,6 +39,31 @@
 #include "ai5/arc.h"
 #include "ai5/lzss.h"
 #include "ai5/game.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+EM_JS(unsigned, web_archive_size, (int fd), {
+    const key = FS.getStream(fd).path.split('/').pop().toUpperCase();
+    return Module.webYuno.manifest.archives[key].size;
+});
+EM_JS(uint8_t *, web_archive_read_cached, (int fd, const char *name, uint32_t *size), {
+    const archive = FS.getStream(fd).path.split('/').pop().toUpperCase();
+    const bytes = Module.webYuno.cachedAsset(archive + '/' + UTF8ToString(name).toUpperCase());
+    if (!bytes) return 0;
+    const pointer = _malloc(bytes.length);
+    HEAPU8.set(bytes, pointer);
+    HEAPU32[size >> 2] = bytes.length;
+    return pointer;
+});
+EM_ASYNC_JS(uint8_t *, web_archive_read, (int fd, const char *name, uint32_t *size), {
+    const archive = FS.getStream(fd).path.split('/').pop().toUpperCase();
+    const bytes = await Module.webYuno.asset(archive + '/' + UTF8ToString(name).toUpperCase());
+    if (!bytes) return 0;
+    const pointer = _malloc(bytes.length);
+    HEAPU8.set(bytes, pointer);
+    HEAPU32[size >> 2] = bytes.length;
+    return pointer;
+});
+#endif
 
 #define MAX_SANE_FILES 100000
 #define DEFAULT_CACHE_SIZE 16
@@ -47,6 +72,9 @@ define_hashtable_string(arcindex, int);
 
 static off_t get_file_size(FILE *fp)
 {
+#ifdef __EMSCRIPTEN__
+	return web_archive_size(fileno(fp));
+#endif
 	// get size of archive
 	if (fseek(fp, 0, SEEK_END)) {
 		WARNING("fseek: %s", strerror(errno));
@@ -118,6 +146,7 @@ static bool arc_get_metadata(FILE *fp, struct arc_metadata *meta_out)
 		return false;
 
 	// check for game-specific cipher
+#ifndef WEB_YUNO_ONLY
 	switch (ai5_target_game) {
 	case GAME_DOUKYUUSEI2_DL:
 		meta.entry_size = 39;
@@ -140,6 +169,7 @@ static bool arc_get_metadata(FILE *fp, struct arc_metadata *meta_out)
 	default:
 		break;
 	}
+#endif
 
 	// read (at least) 3 entries
 	uint8_t entry[0x318];
@@ -404,6 +434,7 @@ static bool typical_read_entry(struct archive *arc, struct archive_data *file, u
 	return true;
 }
 
+#ifndef WEB_YUNO_ONLY
 static uint8_t doukyuusei_2_dl_sbox[256] = {
 	// 0
 	0x63, 0x93,  0xB, 0xCD, 0x51, 0x8A, 0x60, 0xC5,
@@ -540,6 +571,7 @@ static bool kisaku_anim_read_index(FILE *fp, struct archive *arc)
 	create_index(arc);
 	return true;
 }
+#endif
 
 static bool arc_read_index(FILE *fp, struct archive *arc)
 {
@@ -549,6 +581,10 @@ static bool arc_read_index(FILE *fp, struct archive *arc)
 	}
 
 	if (arc->meta.scheme == ARCHIVE_SCHEME_GAME_SPECIFIC) {
+#ifdef WEB_YUNO_ONLY
+		WARNING("Game-specific archive type is not supported by Web YU-NO");
+		return false;
+#else
 		switch (ai5_target_game) {
 		case GAME_DOUKYUUSEI2_DL:
 			return read_index(fp, arc, doukyuusei_2_dl_read_entry);
@@ -560,6 +596,7 @@ static bool arc_read_index(FILE *fp, struct archive *arc)
 			WARNING("Game-specific archive type but no game specified");
 			return false;
 		}
+#endif
 	}
 
 	return read_index(fp, arc, typical_read_entry);
@@ -567,7 +604,7 @@ static bool arc_read_index(FILE *fp, struct archive *arc)
 
 struct archive *archive_open(const char *path, unsigned flags)
 {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
 	flags &= ~ARCHIVE_MMAP;
 #endif
 	FILE *fp = NULL;
@@ -584,6 +621,10 @@ struct archive *archive_open(const char *path, unsigned flags)
 
 	bool meta_ok;
 	const char *ext = file_extension(path);
+#ifdef WEB_YUNO_ONLY
+	(void)ext;
+	meta_ok = arc_get_metadata(fp, &arc->meta);
+#else
 	if (!strcasecmp(ext, "dat")) {
 		meta_ok = dat_get_metadata(fp, &arc->meta);
 	} else if (!strcasecmp(ext, "awd")) {
@@ -593,6 +634,7 @@ struct archive *archive_open(const char *path, unsigned flags)
 	} else {
 		meta_ok = arc_get_metadata(fp, &arc->meta);
 	}
+#endif
 	if (!meta_ok) {
 		WARNING("Failed to read archive metadata");
 		goto error;
@@ -688,6 +730,11 @@ static bool data_decompress(struct archive_data *file)
 	uint8_t *data;
 	size_t data_size;
 
+#ifdef WEB_YUNO_ONLY
+	if (file->archive->flags & ARCHIVE_RAW)
+		return true;
+	data = lzss_decompress(file->data, file->raw_size, &data_size);
+#else
 	if (file->archive->meta.type == ARCHIVE_TYPE_AWD
 			|| file->archive->meta.type == ARCHIVE_TYPE_AWF) {
 		if (file->meta.type == AWD_PCM) {
@@ -709,6 +756,7 @@ static bool data_decompress(struct archive_data *file)
 		// LZSS compressed: decompress
 		data = lzss_decompress(file->data, file->raw_size, &data_size);
 	}
+#endif
 
 	if (!file->mapped)
 		free(file->data);
@@ -787,6 +835,12 @@ bool archive_data_load(struct archive_data *data)
 	assert(!data->data);
 
 	// load data
+#ifdef __EMSCRIPTEN__
+	data->data = web_archive_read_cached(fileno(data->archive->fp), data->name, &data->size);
+	if (!data->data)
+		data->data = web_archive_read(fileno(data->archive->fp), data->name, &data->size);
+	if (!data->data) return false;
+#else
 	if (data->archive->mapped) {
 		data->data = data->archive->map.data + data->offset;
 		data->size = data->raw_size;
@@ -804,6 +858,7 @@ bool archive_data_load(struct archive_data *data)
 		}
 		data->size = data->raw_size;
 	}
+#endif
 
 	if (!data_decompress(data))
 		return false;

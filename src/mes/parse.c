@@ -304,6 +304,11 @@ static string mes_parse_txt(struct buffer *mes, bool *terminated)
 			return NULL;
 		}
 		if (unlikely(!mes_char_is_zenkaku(c))) {
+			// The YU-NO English patch also puts ASCII inside full-width text.
+			if (ai5_target_game == GAME_YUNO && c >= 0x20 && c < 0x7f) {
+				str[str_i++] = buffer_read_u8(mes);
+				continue;
+			}
 			DC_WARNING(mes->index, "Invalid byte in TXT statement: %02x", (unsigned)c);
 			*terminated = false;
 			goto unterminated;

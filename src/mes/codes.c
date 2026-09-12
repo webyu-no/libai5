@@ -1084,6 +1084,9 @@ struct mes_code_tables mes_code_tables = {
 
 static struct mes_code_tables *get_code_tables(enum ai5_game_id id)
 {
+#ifdef WEB_YUNO_ONLY
+	return &elf_classics_tables;
+#else
 	switch (id) {
 	case GAME_SHANGRLIA:
 	case GAME_SHANGRLIA2:
@@ -1108,10 +1111,14 @@ static struct mes_code_tables *get_code_tables(enum ai5_game_id id)
 	default:
 		return &default_tables;
 	}
+#endif
 }
 
 static mes_namespace_t get_system_namespace(enum ai5_game_id id)
 {
+#ifdef WEB_YUNO_ONLY
+	return &mes_sys_classics;
+#else
 	switch (id) {
 	case GAME_ISAKU:        return &mes_sys_isaku;
 	case GAME_DOUKYUUSEI:   return &mes_sys_doukyuusei;
@@ -1126,10 +1133,14 @@ static mes_namespace_t get_system_namespace(enum ai5_game_id id)
 	case GAME_KAWARAZAKIKE: return &mes_sys_kawarazakike;
 	default:                return &mes_sys_none;
 	}
+#endif
 }
 
 static mes_namespace_t get_util_namespace(enum ai5_game_id id)
 {
+#ifdef WEB_YUNO_ONLY
+	return &mes_util_yuno;
+#else
 	switch (id) {
 	case GAME_ISAKU:     return &mes_util_isaku;
 	case GAME_AI_SHIMAI: return &mes_util_aishimai;
@@ -1138,6 +1149,7 @@ static mes_namespace_t get_util_namespace(enum ai5_game_id id)
 	case GAME_YUNO:      return &mes_util_yuno;
 	default:             return &mes_util_none;
 	}
+#endif
 }
 
 void mes_set_game(enum ai5_game_id id)

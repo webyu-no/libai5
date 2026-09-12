@@ -25,6 +25,25 @@
 struct cg *gp8_decode(uint8_t *data, size_t size)
 {
 	struct cg *cg = xcalloc(1, sizeof(struct cg));
+	if (size >= 1036 && !memcmp(data, "WGP8", 4)) {
+		cg->metrics.x = le_get16(data, 4);
+		cg->metrics.y = le_get16(data, 6);
+		cg->metrics.w = le_get16(data, 8);
+		cg->metrics.h = le_get16(data, 10);
+		cg->metrics.bpp = 8;
+		size_t pixel_size = (size_t)cg->metrics.w * cg->metrics.h;
+		if (size != 1036 + pixel_size) {
+			WARNING("Unexpected size for Web GP8 pixel data (expected %u; got %u)",
+					(unsigned)(1036 + pixel_size), (unsigned)size);
+			free(cg);
+			return NULL;
+		}
+		cg->palette = xmalloc(256 * 4);
+		memcpy(cg->palette, data + 12, 256 * 4);
+		cg->pixels = xmalloc(pixel_size);
+		memcpy(cg->pixels, data + 1036, pixel_size);
+		return cg;
+	}
 	cg->metrics.x = le_get16(data, 0);
 	cg->metrics.y = le_get16(data, 2);
 	cg->metrics.w = le_get16(data, 4);

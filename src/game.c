@@ -23,6 +23,9 @@
 enum ai5_game_id ai5_target_game = -1;
 
 struct ai5_game ai5_games[] = {
+#ifdef WEB_YUNO_ONLY
+	{ "yuno",           GAME_YUNO,           "この世の果てで恋を唄う少女YU-NO (エルフclassics)" },
+#else
 	{ "aishimai",       GAME_AI_SHIMAI,      "愛姉妹 ～二人の果実～" },
 	{ "allstars",       GAME_ALLSTARS,       "エルフオールスターズ脱衣雀" },
 	{ "beyond",         GAME_BEYOND,         "ビ・ ヨンド ～黒大将に見られてる～" },
@@ -41,6 +44,7 @@ struct ai5_game ai5_games[] = {
 	{ "shuusaku",       GAME_SHUUSAKU,       "臭作" },
 	{ "yukinojou",      GAME_YUKINOJOU,      "あしたの雪之丞" },
 	{ "yuno",           GAME_YUNO,           "この世の果てで恋を唄う少女YU-NO (エルフclassics)" },
+#endif
 };
 
 enum ai5_game_id ai5_parse_game_id(const char *str)

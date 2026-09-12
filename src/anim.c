@@ -26,6 +26,12 @@ enum anim_type anim_type = ANIM_S4;
 
 void anim_set_game(enum ai5_game_id game)
 {
+#ifdef WEB_YUNO_ONLY
+	anim_a_src = 1;
+	anim_draw_call_size = 33;
+	anim_type = ANIM_S4;
+	return;
+#else
 	switch (game) {
 	case GAME_ISAKU:
 	case GAME_DOUKYUUSEI:
@@ -53,6 +59,7 @@ void anim_set_game(enum ai5_game_id game)
 	if (game == GAME_DOUKYUUSEI) {
 		anim_a_src = 9;
 	}
+#endif
 }
 
 static void parse_color(struct buffer *in, struct anim_color *out)
